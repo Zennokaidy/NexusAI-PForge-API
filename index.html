@@ -811,6 +811,26 @@
             border-color: #34c759;
         }
 
+        .code-block-wrapper.pforge-sent {
+            border-color: rgba(52, 199, 89, 0.4);
+        }
+        .pforge-sent-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            background: rgba(52, 199, 89, 0.15);
+            color: #34c759;
+            border: 1px solid rgba(52, 199, 89, 0.3);
+            border-radius: 4px;
+            font-family: ui-monospace, monospace;
+            font-size: 11px;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 70%;
+        }
+
         .streaming-cursor {
             display: inline-block;
             width: 2px;
@@ -1633,6 +1653,41 @@
 
             \`three.create("Mesh", ...)\`, \`three.call(handle, method, ...)\`, \`three.get(handle, prop)\`, \`three.set(handle, prop, v)\`, \`three.const("name")\` for direct Three.js access when needed.
 
+            ## SENDING SCRIPTS TO THE STUDIO TREE (MANDATORY)
+
+            Every script the user would actually run MUST be emitted with a pforge code block, NEVER with plain \`lua\`. Plain \`lua\` blocks will NOT be added to the game — they are only for short explanation snippets of 1-3 lines. Anything longer is a script and MUST use pforge.
+
+            Syntax (three valid forms):
+
+            - \`\`\`pforge-server:ScriptName → ServerScripts
+            - \`\`\`pforge-client:ScriptName → ClientScripts
+            - \`\`\`pforge-module:ModuleName → ClientServices/Modules
+
+            Correct example (DO THIS):
+            \`\`\`pforge-client:PlayerSprint
+            onUpdate(function(dt)
+            player.speed = keyboard.SHIFT and 16 or 8
+            end)
+            \`\`\`
+
+            WRONG example (NEVER DO THIS for runnable code):
+            \`\`\`lua
+            onUpdate(function(dt)
+            player.speed = keyboard.SHIFT and 16 or 8
+            end)
+            \`\`\`
+
+            Decision rule:
+            1. If the block has onInit/onUpdate/onDraw, or calls gfx3d.*, player.*, screen.*, keyboard.*, mouse.*, net.*, storage.*, after(), every() → it is a SCRIPT. Use pforge-*.
+            2. If the block is a one-liner showing a function signature or property value → plain \`lua\` is OK.
+            3. When unsure, use pforge-*.
+
+            Naming rules:
+            - PascalCase identifiers only: A-Z a-z 0-9 _ (no spaces, no accents, no dots)
+            - One script per pforge block — never split a single script across multiple blocks
+            - If the user asks for 2 scripts, output 2 separate pforge blocks
+            - Never mix multiple scripts inside one pforge block
+
             ## RULES
 
             1. The native player is always available on the client. Configure it through \`player.*\` — position, speed, camera mode, etc.
@@ -1815,15 +1870,20 @@
                 }
             }
 
-            function wrapPreElements(container) {
+            function wrapPreElements(container, isStreaming) {
                 container.querySelectorAll('pre').forEach(pre => {
                     if (pre.closest('.code-block-wrapper')) return;
 
                     const code = pre.querySelector('code');
                     if (!code) return;
 
+                    const classNames = code.className || '';
+
+                    // pforge-server:Name / pforge-client:Name / pforge-module:Name
+                    const pforgeMatch = classNames.match(/language-pforge-(server|client|module)(?::([A-Za-z0-9_]+))?/);
+
                     let lang = 'code';
-                    const match = code.className.match(/language-([\w-]+)/);
+                    const match = classNames.match(/language-([\w:]+)/);
                     if (match) lang = match[1];
 
                     const wrapper = document.createElement('div');
@@ -1834,7 +1894,7 @@
 
                     const langLabel = document.createElement('span');
                     langLabel.className = 'code-lang';
-                    langLabel.textContent = lang;
+                    langLabel.textContent = pforgeMatch ? 'Luau' : lang;
 
                     const copyBtn = document.createElement('button');
                     copyBtn.className = 'copy-code-button';
@@ -1865,7 +1925,93 @@
                     pre.parentNode.insertBefore(wrapper, pre);
                     wrapper.appendChild(pre);
                     wrapper.appendChild(footer);
+
+                    // Encaminha para o Studio SOMENTE após o streaming terminar
+                    if (pforgeMatch && !isStreaming) {
+                        sendPforgeScript(pforgeMatch[1], pforgeMatch[2] || 'NexusScript', code.textContent || '', wrapper);
+                    } else if (!pforgeMatch && !isStreaming && lang === 'lua') {
+                        // Fallback: botão manual em blocos lua
+                        const manualBtn = document.createElement('button');
+                        manualBtn.className = 'copy-code-button';
+                        manualBtn.type = 'button';
+                        manualBtn.textContent = 'Send to Studio';
+                        manualBtn.title = 'Adicionar este código à árvore do PixelForge';
+                        manualBtn.addEventListener('click', function() {
+                            promptSendToStudio(code.textContent || '', wrapper, manualBtn);
+                        });
+                        footer.insertBefore(manualBtn, copyBtn);
+                    }
                 });
+            }
+
+            function sendPforgeScript(type, name, scriptCode, wrapper) {
+                if (wrapper.dataset.pforgeSent === '1') return;
+                wrapper.dataset.pforgeSent = '1';
+
+                const safeName = String(name || 'NexusScript').replace(/[^A-Za-z0-9_]/g, '').slice(0, 80) || 'NexusScript';
+                const labelMap = { server: 'ServerScripts', client: 'ClientScripts', module: 'ClientServices/Modules' };
+
+                let sent = false;
+                try {
+                    if (window.parent && window.parent !== window) {
+                        window.parent.postMessage({
+                            __pforge: true,
+                            action: 'createScript',
+                            name: safeName,
+                            scriptType: type,
+                            code: scriptCode
+                        }, '*');
+                        sent = true;
+                    }
+                } catch (e) {}
+
+                if (!sent) return;
+
+                wrapper.classList.add('pforge-sent');
+
+                const footer = wrapper.querySelector('.code-block-footer');
+                if (footer) {
+                    const badge = document.createElement('span');
+                    badge.className = 'pforge-sent-badge';
+                    badge.textContent = '✓ ' + safeName + ' → ' + labelMap[type];
+                    footer.insertBefore(badge, footer.querySelector('.copy-code-button'));
+                }
+            }
+
+            function promptSendToStudio(scriptCode, wrapper, triggerBtn) {
+                if (!scriptCode || !scriptCode.trim()) return;
+                if (wrapper.dataset.pforgeSent === '1') return;
+
+                const inferredName = (function() {
+                    const m = scriptCode.match(/(?:function|local\s+function)\s+([A-Za-z_]\w*)/);
+                    if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                    const m2 = scriptCode.match(/--\s*([A-Za-z][A-Za-z0-9 _-]{2,40})/);
+                    if (m2) return m2[1].replace(/[^A-Za-z0-9_]/g, '').slice(0, 40);
+                    return 'NexusScript';
+                })();
+
+                const inferredType =
+                    /(?:^|[^\w.])net\.(send|onMessage|me)\b/.test(scriptCode) ||
+                    /ServerConnection|:GetPlayers|serverInit|serverUpdate/.test(scriptCode)
+                        ? 'server'
+                        : 'client';
+
+                const name = window.prompt('Script name (PascalCase, no spaces):', inferredName);
+                if (name === null) return;
+                const cleanName = String(name).replace(/[^A-Za-z0-9_]/g, '').slice(0, 80);
+                if (!cleanName) { showStatus('Invalid name', true); return; }
+
+                const typeChoice = window.prompt(
+                    'Where to add?\\n  server  → ServerScripts\\n  client  → ClientScripts\\n  module  → ClientServices/Modules',
+                    inferredType
+                );
+                if (typeChoice === null) return;
+                const cleanType = ['server', 'client', 'module'].includes(String(typeChoice).toLowerCase())
+                    ? String(typeChoice).toLowerCase()
+                    : inferredType;
+
+                sendPforgeScript(cleanType, cleanName, scriptCode, wrapper);
+                if (triggerBtn) triggerBtn.textContent = 'Sent!';
             }
 
             function scrollToBottomNow() {
@@ -1888,7 +2034,7 @@
                     streamingBubbleElement.querySelectorAll('pre code').forEach(block => {
                         try { hljs.highlightElement(block); } catch(e) {}
                     });
-                    wrapPreElements(streamingBubbleElement);
+                    wrapPreElements(streamingBubbleElement, true);
                 } catch(e) {
                     streamingBubbleElement.textContent = displayBuffer;
                 }
@@ -2589,7 +2735,7 @@
                                 bubble.querySelectorAll('pre code').forEach(block => {
                                     try { hljs.highlightElement(block); } catch(e) {}
                                 });
-                                wrapPreElements(bubble);
+                                wrapPreElements(bubble, false);
                             } catch(e) { bubble.textContent = text || '[Error]'; }
                         }
                     }
@@ -2701,19 +2847,14 @@
                         const apiKey = getApiKey();
                         attempts++;
                         try {
-                            const systemInstruction = PIXELFORGE_SYSTEM_PROMPT;
-
-                            const contents = [
-                                { role: "user", parts: [{ text: systemInstruction }] },
-                                ...state.currentMessages.slice(0, -1).map(msg => ({
-                                    role: msg.role,
-                                    parts: msg.parts.map(p => {
-                                        if (p.text) return { text: p.text };
-                                        if (p.inlineData) return { inlineData: p.inlineData };
-                                        return p;
-                                    })
-                                }))
-                            ];
+                            const contents = state.currentMessages.slice(0, -1).map(msg => ({
+                                role: msg.role,
+                                parts: msg.parts.map(p => {
+                                    if (p.text) return { text: p.text };
+                                    if (p.inlineData) return { inlineData: p.inlineData };
+                                    return p;
+                                })
+                            }));
 
                             if (continueCount > 0 && fullResponse) {
                                 const lastPart = fullResponse.slice(-3000);
@@ -2724,7 +2865,15 @@
 
                             const response = await fetch(
                                 'https://generativelanguage.googleapis.com/v1beta/models/' + modelId + ':streamGenerateContent?key=' + apiKey + '&alt=sse',
-                                { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents, generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7, topK: 40, topP: 0.95 } }) }
+                                {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        contents,
+                                        system_instruction: { parts: [{ text: PIXELFORGE_SYSTEM_PROMPT }] },
+                                        generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7, topK: 40, topP: 0.95 }
+                                    })
+                                }
                             );
 
                             if (response.status === 429 || response.status === 403 || response.status === 400) {
