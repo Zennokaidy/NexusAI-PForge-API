@@ -1655,38 +1655,61 @@
 
             ## SENDING SCRIPTS TO THE STUDIO TREE (MANDATORY)
 
-            Every script the user would actually run MUST be emitted with a pforge code block, NEVER with plain \`lua\`. Plain \`lua\` blocks will NOT be added to the game — they are only for short explanation snippets of 1-3 lines. Anything longer is a script and MUST use pforge.
+            ### CRITICAL: gfx3d, screen, sprites, maps ARE CLIENT-ONLY
 
-            Syntax (three valid forms):
+            The 3D scene and 2D drawing APIs only work on the CLIENT. If you put gfx3d/screen/sprites/maps code inside a pforge-server block, the objects are created in an invisible server scene and the player sees NOTHING — just console prints.
 
-            - \`\`\`pforge-server:ScriptName → ServerScripts
-            - \`\`\`pforge-client:ScriptName → ClientScripts
+            That is why every script that calls gfx3d.*, screen.*, sprites.*, maps.*, player.*, keyboard.*, mouse.*, touch.*, gamepad.* MUST use pforge-client. NEVER use pforge-server for those.
+
+            Server scripts are for pure logic only: net.send, net.onMessage, storage.*, system.time, math. The server decides; the client renders.
+
+            ### Syntax
+
+            - \`\`\`pforge-server:ScriptName → ServerScripts  (net/storage/system only)
+            - \`\`\`pforge-client:ScriptName → ClientScripts  (gfx3d/screen/player/input)
             - \`\`\`pforge-module:ModuleName → ClientServices/Modules
 
-            Correct example (DO THIS):
-            \`\`\`pforge-client:PlayerSprint
-            onUpdate(function(dt)
-            player.speed = keyboard.SHIFT and 16 or 8
+            ### WRONG — never do this (server block with gfx3d):
+
+            \`\`\`pforge-server:BadSpawner
+            gfx3d.addBox("cube", { color = 0xff0000, position = { 0, 1, 0 } })
+            \`\`\`
+
+            This script will run, the box will be created on the server, and NO ONE will see it.
+
+            ### RIGHT — client renders, server decides:
+
+            \`\`\`pforge-server:ServerSpawner
+            every(3, function()
+                local x = random.nextInt(40) - 20
+                local z = random.nextInt(40) - 20
+                net.send("world", "SPAWN|" .. x .. "|2|" .. z)
             end)
             \`\`\`
 
-            WRONG example (NEVER DO THIS for runnable code):
-            \`\`\`lua
-            onUpdate(function(dt)
-            player.speed = keyboard.SHIFT and 16 or 8
+            \`\`\`pforge-client:SpawnRenderer
+            gfx3d.init({ background = 0x111625, fov = 75 })
+            net.onMessage("world", function(msg)
+                local x, y, z = string.match(msg, "^SPAWN|([^|]+)|([^|]+)|([^|]+)$")
+                if not x then return end
+                gfx3d.addBox("cube_" .. system.time(), {
+                    size = { 2, 2, 2 }, color = math.random(0x100000, 0xFFFFFF),
+                    position = { tonumber(x), tonumber(y), tonumber(z) }
+                })
             end)
             \`\`\`
 
-            Decision rule:
-            1. If the block has onInit/onUpdate/onDraw, or calls gfx3d.*, player.*, screen.*, keyboard.*, mouse.*, net.*, storage.*, after(), every() → it is a SCRIPT. Use pforge-*.
-            2. If the block is a one-liner showing a function signature or property value → plain \`lua\` is OK.
-            3. When unsure, use pforge-*.
+            ### Decision rule (follow exactly)
 
-            Naming rules:
-            - PascalCase identifiers only: A-Z a-z 0-9 _ (no spaces, no accents, no dots)
-            - One script per pforge block — never split a single script across multiple blocks
-            - If the user asks for 2 scripts, output 2 separate pforge blocks
-            - Never mix multiple scripts inside one pforge block
+            1. Code contains gfx3d / screen / sprites / maps / player / keyboard / mouse / touch / gamepad → pforge-client.
+            2. Code contains only net.* / storage.* / math / system.time → pforge-server.
+            3. When unsure → pforge-client. Client is the safe default.
+            4. Plain \`lua\` blocks are ONLY for 1-3 line snippets the user is not meant to run. If the block has onInit/onUpdate/onDraw or calls any of the above, it is a SCRIPT and MUST be tagged pforge-*.
+
+            ### Naming
+
+            - PascalCase only: A-Z a-z 0-9 _. No spaces, no accents.
+            - One script per block. Two scripts → two blocks.
 
             ## RULES
 
@@ -1930,25 +1953,90 @@
                     if (pforgeMatch && !isStreaming) {
                         sendPforgeScript(pforgeMatch[1], pforgeMatch[2] || 'NexusScript', code.textContent || '', wrapper);
                     } else if (!pforgeMatch && !isStreaming && lang === 'lua') {
-                        // Fallback: botão manual em blocos lua
-                        const manualBtn = document.createElement('button');
-                        manualBtn.className = 'copy-code-button';
-                        manualBtn.type = 'button';
-                        manualBtn.textContent = 'Send to Studio';
-                        manualBtn.title = 'Adicionar este código à árvore do PixelForge';
-                        manualBtn.addEventListener('click', function() {
-                            promptSendToStudio(code.textContent || '', wrapper, manualBtn);
-                        });
-                        footer.insertBefore(manualBtn, copyBtn);
+                        const raw = code.textContent || '';
+                        if (looksLikeScript(raw)) {
+                            // IA esqueceu a tag → auto-detecta e manda como client (safe default)
+                            const autoName = inferScriptName(raw);
+                            const autoType = inferScriptType(raw);
+                            sendPforgeScript(autoType, autoName, raw, wrapper);
+                        } else {
+                            // Snippet curto → só botão manual, não envia sozinho
+                            const manualBtn = document.createElement('button');
+                            manualBtn.className = 'copy-code-button';
+                            manualBtn.type = 'button';
+                            manualBtn.textContent = 'Send to Studio';
+                            manualBtn.title = 'Adicionar este código à árvore do PixelForge';
+                            manualBtn.addEventListener('click', function() {
+                                promptSendToStudio(raw, wrapper, manualBtn);
+                            });
+                            footer.insertBefore(manualBtn, copyBtn);
+                        }
                     }
                 });
+            }
+
+            function looksLikeScript(code) {
+                if (!code) return false;
+                const lines = code.split('\n').filter(l => l.trim()).length;
+                if (lines < 3) return false;
+                return /\b(onInit|onUpdate|onDraw)\s*\(/.test(code)
+                    || /\bgfx3d\./.test(code)
+                    || /\bscreen\./.test(code)
+                    || /\bplayer\.[a-zA-Z]/.test(code)
+                    || /\bnet\.(send|onMessage|me)\b/.test(code)
+                    || /\bkeyboard\./.test(code)
+                    || /\bmouse\./.test(code)
+                    || /\bafter\s*\(|\bevery\s*\(/.test(code);
+            }
+
+            function inferScriptType(code) {
+                // gfx3d/screen/player/input são SEMPRE client no PixelForge
+                if (/\bgfx3d\./.test(code)
+                    || /\bscreen\./.test(code)
+                    || /\bsprites?\./.test(code)
+                    || /\bplayer\.[a-zA-Z]/.test(code)
+                    || /\bkeyboard\./.test(code)
+                    || /\bmouse\./.test(code)
+                    || /\btouch\./.test(code)
+                    || /\bgamepad\./.test(code)) {
+                    return 'client';
+                }
+                // Só net/storage/system → server
+                if (/\bnet\.(send|onMessage|me)\b/.test(code)
+                    || /\bstorage\./.test(code)) {
+                    return 'server';
+                }
+                // Default seguro
+                return 'client';
+            }
+
+            function inferScriptName(code) {
+                const m = code.match(/(?:function|local\s+function)\s+([A-Za-z_]\w*)/);
+                if (m) return m[1].charAt(0).toUpperCase() + m[1].slice(1);
+                const m2 = code.match(/--\s*([A-Za-z][A-Za-z0-9 _-]{2,40})/);
+                if (m2) {
+                    const cleaned = m2[1].replace(/[^A-Za-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+                    return cleaned.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').slice(0, 40);
+                }
+                return 'NexusScript';
             }
 
             function sendPforgeScript(type, name, scriptCode, wrapper) {
                 if (wrapper.dataset.pforgeSent === '1') return;
                 wrapper.dataset.pforgeSent = '1';
 
-                const safeName = String(name || 'NexusScript').replace(/[^A-Za-z0-9_]/g, '').slice(0, 80) || 'NexusScript';
+                // Defensivo: se a IA colocou "pforge-server:Nome" dentro do próprio código, remove
+                let cleanCode = String(scriptCode || '');
+                cleanCode = cleanCode.replace(/^\s*pforge-(?:server|client|module)(?::[A-Za-z0-9_]+)?\s*\n?/i, '');
+                cleanCode = cleanCode.replace(/^\s*```[a-z]*\s*\n?/i, '');
+                cleanCode = cleanCode.replace(/\n?\s*```\s*$/i, '');
+
+                const cleanedName = String(name || 'NexusScript')
+                    .replace(/^pforge-(?:server|client|module)[:_]?/i, '')
+                    .replace(/[^A-Za-z0-9_]/g, '')
+                    .slice(0, 80) || 'NexusScript';
+
+                const safeName = cleanedName;
                 const labelMap = { server: 'ServerScripts', client: 'ClientScripts', module: 'ClientServices/Modules' };
 
                 let sent = false;
@@ -1959,7 +2047,7 @@
                             action: 'createScript',
                             name: safeName,
                             scriptType: type,
-                            code: scriptCode
+                            code: cleanCode
                         }, '*');
                         sent = true;
                     }
