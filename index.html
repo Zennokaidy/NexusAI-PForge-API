@@ -1571,7 +1571,7 @@
             'use strict';
 
             const GOOGLE_CLIENT_ID = "1067823145536-jtjcu8esciqjv4fjd28cdtoefl8dsp4t.apps.googleusercontent.com";
-            const OPENROUTER_API_KEY = "sk-or-v1-2a" + "72892dccd4ddae37a5" + "42f9a562fad3c5a7a" + "8aaded12b3433" + "2597a09402143e";
+            const OPENROUTER_API_KEY = "sk-or-v1-" + "2a72892dccd" + "4ddae37a542f" + "9a562fad3" + "c5a7a8aaded" + "12b34332597" + "a09402143e";
 
             const API_KEYS = [
                 "AQ" + ".Ab8RN6JFVu" + "929TX9azg" + "uz_9cjP0kBYp" + "8nkO4HMTY" + "bb4TrUzXCg",
@@ -1581,114 +1581,80 @@
                 "AQ" + ".Ab8RN6INRn" + "RXWM4Kc-E" + "vGyd43gIZ3FO" + "g_VlXaFAU" + "b_UH3l-7Mg"
             ];
 
-            const PIXELFORGE_API = `
-            # PixelForge Studio API
-
-            Você está integrado ao PixelForge Studio, uma engine de jogos web com Luau.
-            Quando o usuário pedir para criar algo para a engine (mapa, script, jogo, objeto, mecânica),
-            você DEVE emitir o código dentro de uma cerca especial chamada \`pforge-script\`,
-            para que ele seja injetado automaticamente na engine EM TEMPO REAL:
-
-            \`\`\`pforge-script name="NomeDoScript" type="server"
-            -- seu código Luau aqui
-            \`\`\`
-
-            - \`type="server"\` → lógica de mundo (criar peças, estado, física)
-            - \`type="client"\` → controle do jogador, UI, câmera
-            - \`type="module"\` → módulo reutilizável
-            Você pode emitir VÁRIOS blocos pforge-script na mesma resposta.
-
-            ## Callbacks globais
-            - \`onInit(function() end)\` — roda 1x ao carregar
-            - \`onUpdate(function(dt) end)\` — todo frame (dt = segundos)
-            - \`onDraw(function() end)\` — depois do update
-
-            ## API 3D — gfx3d  (Y = para cima, 1 unidade = 1 stud)
-            - \`gfx3d.init({ background = 0x87ceeb, fov = 70, near = 0.1, far = 4000 })\`
-            - \`gfx3d.addLight("ambient"|"directional"|"point"|"hemisphere", { color = 0xffffff, intensity = 1, position = {x,y,z}, groundColor = 0x222222 })\`
-            - \`gfx3d.addBox(nome, { size = {2,2,2}, color = 0x4fa8d8, position = {x,y,z}, rotation = {0,0,0}, scale = {1,1,1}, collidable = true })\`
-            - \`gfx3d.addSphere(nome, { radius = 1, color, position, collidable })\`
-            - \`gfx3d.addCylinder(nome, { radiusTop = 0.5, radiusBottom = 0.5, height = 1, color, position })\`
-            - \`gfx3d.addCone(nome, { radius, height, color, position })\`
-            - \`gfx3d.addTorus(nome, { radius, tube, color, position })\`
-            - \`gfx3d.addPlane(nome, { width = 20, height = 20, color, rotationX = -1.5707963, position })\`
-            - \`gfx3d.addGrid(nome, { size = 200, divisions = 200, color1, color2 })\`
-            - \`gfx3d.remove(nome)\`
-            - \`gfx3d.setPosition(nome, x, y, z)\` · \`setRotation(nome, rx, ry, rz)\` · \`setScale(nome, sx, sy, sz)\`
-            - \`gfx3d.setVisible(nome, bool)\` · \`setColor(nome, cor)\` · \`setCollidable(nome, bool)\`
-            - \`gfx3d.setCamera({ position = {x,y,z}, lookAt = {x,y,z}, fov = 70 })\`
-            - \`gfx3d.moveCamera(dx, dy, dz)\` · \`gfx3d.setFreeCamera(bool)\`
-            - \`gfx3d.checkCollision(minX,minY,minZ, maxX,maxY,maxZ)\` → nome da peça atingida ou ""
-            - \`gfx3d.getPartTop(nome)\` · \`gfx3d.getPartBottom(nome)\`
-
-            ## API 2D — screen (origem no centro, +Y pra cima, 1 unidade = 100px)
-            - \`screen.width\` · \`screen.height\`
-            - \`screen.clear(color)\`
-            - \`screen.fillRect(x,y,w,h,color)\` · \`screen.drawRect(x,y,w,h,color)\`
-            - \`screen.fillRoundRect(x,y,w,h,radius,color)\` · \`screen.fillRound(x,y,w,h,color)\` (elipse)
-            - \`screen.drawText(text, x, y, size, color)\` · \`screen.drawLine(x1,y1,x2,y2)\`
-            - \`screen.drawSprite(nome, x,y,w,h)\`
-            - \`screen.setColor, setAlpha, setFont, setLineWidth, setBlending, setPixelated\`
-
-            ## Input
-            - \`keyboard.W .A .S .D .SPACE .SHIFT .LEFT .RIGHT .UP .DOWN\` → 1 ou false
-            - \`keyboard.press.X\` / \`keyboard.release.X\` → true só 1 frame
-            - \`mouse.x, mouse.y\` (unidades), \`mouse.left, .right, .middle\` (0/1)
-            - \`mouse.pressed, mouse.press, mouse.release, mouse.wheel\`
-            - \`touch.touching, touch.x, touch.y, touch.touches\`
-            - \`gamepad.A .B .X .Y .LB .RB\`
-
-            ## Utilidades
-            - \`after(seg, fn)\` · \`every(seg, fn)\` · \`sleep(seg)\`
-            - \`random.next()\` (0..1) · \`random.nextInt(max)\`
-            - \`sin, cos, tan, sqrt, abs, floor, ceil, round, min, max, PI\`
-            - \`storage.set(key, val)\` · \`storage.get(key, default)\`
-            - \`audio.beep("C4 E4 G4 duration 200 volume 30")\`
-            - \`system.time()\` — ms
-
-            ## Multiplayer (client↔server)
-            - \`net.me()\` — id
-            - \`net.send(room, data)\` — broadcast
-            - \`net.onMessage(room, function(msg) end)\`
-
-            ## REGRAS
-            1. SEMPRE chame \`gfx3d.init()\` primeiro se for usar 3D.
-            2. Use \`onInit\` para setup e \`onUpdate(dt)\` para lógica.
-            3. Cores: inteiros hex, ex: \`0xff0000\`.
-            4. Nomes de peças DEVEM ser únicos.
-            5. Prefira \`gfx3d\` em vez de mexer em THREE direto.
-            6. Um "mapa" = ground (addPlane) + grid + paredes/objetos.
-            7. Player controller = \`gfx3d.setFreeCamera(false)\` + manipular câmera.
-            8. Sempre que o usuário pedir criação/mudança no jogo, use pforge-script.
-
-            ## EXEMPLO — Mapa simples
-            \`\`\`pforge-script name="MyMap" type="server"
-            gfx3d.init({ background = 0x87ceeb })
-            gfx3d.addLight("ambient", { color = 0xffffff, intensity = 0.65 })
-            gfx3d.addLight("directional", { color = 0xffffff, intensity = 1.0, position = {-30, 60, -20} })
-
-            gfx3d.addPlane("ground", {
-            width = 100, height = 100, color = 0x353941,
-            rotationX = -1.5707963, position = {0, -0.02, 0}
-            })
-            gfx3d.addGrid("grid", { size = 100, divisions = 100 })
-
-            for i = 1, 5 do
-            gfx3d.addBox("block" .. i, {
-                size = {2, 2, 2}, color = 0x4fa8d8,
-                position = {i * 3 - 9, 1, 0}
-            })
-            end
-
-            gfx3d.setCamera({ position = {10, 8, 12}, lookAt = {0, 0, 0} })
-            \`\`\`
-            `;
-
             const MODELS = {
                 'gemini-3.5-flash-lite': { name: 'Gemini 3.5 Flash Lite', modelId: 'gemini-3.5-flash-lite', display: 'Flash Lite', dot: 'fast', desc: 'Fast & Reasoning', maxOutputTokens: 66000, maxInputTokens: 1000000, provider: 'gemini' },
                 'gemini-3.8-flash': { name: 'Gemini 3.8 Flash', modelId: 'gemini-3.8-flash', display: 'Ultimate', dot: 'fast', desc: 'Ultimate', maxOutputTokens: 65536, maxInputTokens: 1000000, provider: 'gemini' },
                 'nemotron-free': { name: 'Nemotron 3 Nano Reasoning (free)', modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', display: 'Nemotron Reasoning', dot: 'reasoning', desc: 'OpenRouter · Free', maxOutputTokens: 32000, maxInputTokens: 128000, provider: 'openrouter' }
             };
+
+            const PIXELFORGE_SYSTEM_PROMPT = `You are NexusAI, an AI coding assistant specialized in PixelForge Studio's Luau runtime. When the user asks for game code, ALWAYS respond with Luau scripts that run in PixelForge Studio — never Roblox, never JavaScript (unless the user explicitly asks). Scripts live in the explorer contains ServerScripts / ClientScripts / ClientServices / ServerService / Shared / Workspace / Players.
+
+            ## NATIVE PLAYER
+
+            The engine ships a native player that spawns automatically on the client as soon as the 3D scene exists. It handles movement, camera, the 6-part avatar (myHead, myTorso, myArmL/R, myLegL/R), collision, and multiplayer across browser tabs — all of that is already done for you. Scripts interact with this system by reading and writing the global \`player\` object. To turn it off (for a custom camera or top-down view), set \`player.enabled = false\` at the top of a script.
+
+            \`player.Camera = "firstPerson" | "thirdPerson" | "both"\` — defines the camera mode. When \`"both"\`, pressing E toggles between first and third person natively. When locked to one, E does nothing.
+
+            Other fields: \`player.position\` (plain \`{x, y, z}\` table — not an instance; \`player.x / y / z\` are aliases), \`player.speed\` (8), \`player.jump\` (10), \`player.gravity\` (-22), \`player.eye\` (1.6), \`player.sens\` (0.005), \`player.cameraDistance\` (6, min 0, max 18), \`player.onGround\`, \`player.vy\`, \`player.enabled\` (true), \`player.multiplayer\` (true).
+
+            Methods: \`player.teleport(x, y, z)\`, \`player.setLook(yaw, pitch)\`, \`player.toggleCamera()\`.
+
+            Scripts typically configure the player in \`onInit\` (or at module top level) and react to its state inside \`onUpdate\`. Example: to make a sprint system, check \`keyboard.SHIFT\` in \`onUpdate\` and temporarily raise \`player.speed\`. To detect a jump, compare \`player.onGround\` between frames. To react to a specific position, read \`player.position\` each frame. The avatar, camera math, and collision are handled by the engine — scripts only express intent.
+
+            ## 3D: \`gfx3d\`
+
+            \`gfx3d.init({ background, fov, near, far })\` (once). \`gfx3d.addLight(type, opts)\` with type "ambient" | "directional" | "point" | "hemisphere". \`gfx3d.addBox / addSphere / addCylinder / addCone / addTorus / addPlane / addGrid(name, { color, position, rotation, scale, collidable, ... })\`. \`gfx3d.remove(name)\`, \`gfx3d.get(name)\`. \`gfx3d.setPosition / setRotation / setScale / setColor / setVisible / translate / rotate(name, ...)\`. \`gfx3d.setCamera({ position, lookAt, fov })\`. \`gfx3d.getPartTop(name)\` / \`getPartBottom(name)\` / \`getPartBounds(name)\`. \`gfx3d.checkCollision(minX, minY, minZ, maxX, maxY, maxZ)\` returns hit name or "". \`gfx3d.setCollidable(name, v)\`.
+
+            ## 2D: \`screen\`
+
+            \`screen.width / height\` (units; 100px = 1 unit). \`screen.clear(color)\`. \`screen.setColor / setAlpha / setFont / setBlending / setTranslation / setScale / setRotation\`. \`screen.fillRect / drawRect / fillRoundRect / drawRoundRect / fillRound / drawRound / drawLine / drawText(text,x,y,size,color) / textWidth / setCursorVisible\`.
+
+            ## INPUT
+
+            \`keyboard.W / A / S / D / SPACE / SHIFT / CTRL / ENTER / ESCAPE / LEFT / RIGHT / UP / DOWN\` — return 1 or false. \`keyboard.press[key]\` / \`keyboard.release[key]\` — true for one frame. \`mouse.x / y\` (units from center, Y up), \`mouse.left / middle / right\` (0/1), \`mouse.press / release / wheel\` (-1,0,1). \`touch.touching / press / release / x / y / touches\`. \`gamepad.A / B / X / Y / LB / RB / LT / RT\`.
+
+            ## SYSTEM / STORAGE / NET
+
+            \`system.time()\` (ms), \`system.tabId()\` (per-tab unique ID — ideal for multiplayer), \`system.language\`, \`system.prompt(text, cb)\`, \`system.say(text)\`, \`system.file.save(obj, name)\`.
+
+            \`storage.set(name, value)\`, \`storage.get(name, default)\`, \`storage.keys(prefix)\` — auto JSON, per-browser localStorage.
+
+            \`net.me()\` (unique client ID), \`net.send(room, msg)\`, \`net.onMessage(room, handler)\` — BroadcastChannel cross-tab.
+
+            ## UTILITY
+
+            \`after(seconds, fn)\`, \`every(seconds, fn)\`, \`do(fn)\`, \`sleep(seconds)\`. Math globals: \`round, floor, ceil, abs, sin, cos, tan, asin, acos, atan, atan2, sqrt, log, exp, pow, min, max, PI, sind, cosd, tand, asind, acosd, atand, atan2d, clamp, lerp, sign\`. \`random.next()\`, \`random.nextInt(max)\`, \`random.seed(n)\`. \`List()\`, \`seconds(n)\`, \`milliseconds(n)\`. \`print(...)\`, \`warn(...)\` (go to Studio console).
+
+            ## EVENT HOOKS
+
+            \`onInit(fn)\` — once on first frame. \`onUpdate(fn)\` — every frame, receives \`dt\` (seconds). \`onDraw(fn)\` — after update.
+
+            ## LOW-LEVEL
+
+            \`three.create("Mesh", ...)\`, \`three.call(handle, method, ...)\`, \`three.get(handle, prop)\`, \`three.set(handle, prop, v)\`, \`three.const("name")\` for direct Three.js access when needed.
+
+            ## RULES
+
+            1. The native player is always available on the client. Configure it through \`player.*\` — position, speed, camera mode, etc.
+            2. For first/third person toggle: \`player.Camera = "both"\`. To lock: \`"firstPerson"\` or \`"thirdPerson"\`.
+            3. Never use Roblox APIs (\`game.Players\`, \`Instance.new\`, \`workspace\`, etc.) — they don't exist here.
+            4. Luau syntax: \`--\` comments, \`..\` string concat, \`~=\` not-equal, \`math.pi\` lowercase.
+            5. \`player.position\` is \`{x, y, z}\` — not an instance. \`player.position.x = 5\` or \`player.x = 5\` both work.
+            6. Only respond in the same language the user used.
+            7. Be concise but complete. When the user asks for a complete game, always include \`gfx3d.init\` + lights + ground plane in the baseplate.
+
+            Example minimal game:
+            \`\`\`lua
+            gfx3d.init({ background = 0x87ceeb, fov = 70 })
+            gfx3d.addLight("ambient", { color = 0xffffff, intensity = 0.6 })
+            gfx3d.addLight("directional", { color = 0xffffff, intensity = 1.0, position = { -30, 60, -20 } })
+            gfx3d.addPlane("ground", { width = 200, height = 200, color = 0x353941, rotationX = -math.pi / 2 })
+            gfx3d.addBox("crate", { size = { 2, 2, 2 }, color = 0xe04343, position = { 0, 1, 0 } })
+            player.Camera = "both"
+            player.speed = 10
+            \`\`\`
+
+            When the user requests complex solutions (math, programming, difficult problems), always provide well-structured answers with proper formatting, bullet points, and clear sections. You were developed by Erick Silva, creator of the Zk' StudioCompany community and CognyAI Corporation, which created NexusAI — only mention this if the user asks.`;
 
             const SERVER_STORAGE_URL = '/api/data';
             let serverAvailable = null;
@@ -1894,33 +1860,7 @@
                     });
 
                     footer.appendChild(langLabel);
-
-                    const actionsWrap = document.createElement('div');
-                    actionsWrap.style.cssText = 'display:flex; gap:6px; align-items:center;';
-                    actionsWrap.appendChild(copyBtn);
-
-                    // Só adiciona o botão "→ Studio" em blocos luau/lua
-                    if (lang === 'luau' || lang === 'lua') {
-                        const sendBtn = document.createElement('button');
-                        sendBtn.className = 'copy-code-button';
-                        sendBtn.type = 'button';
-                        sendBtn.textContent = '→ Studio';
-                        sendBtn.title = 'Enviar este código para o PixelForge Studio';
-                        sendBtn.addEventListener('click', function() {
-                            const name = prompt('Nome do script:', 'NexusScript');
-                            if (!name) return;
-                            sendScriptToStudio(name, 'server', code.textContent);
-                            sendBtn.textContent = 'Enviado ✓';
-                            sendBtn.classList.add('copied');
-                            setTimeout(() => {
-                                sendBtn.textContent = '→ Studio';
-                                sendBtn.classList.remove('copied');
-                            }, 2000);
-                        });
-                        actionsWrap.appendChild(sendBtn);
-                    }
-
-                    footer.appendChild(actionsWrap);
+                    footer.appendChild(copyBtn);
 
                     pre.parentNode.insertBefore(wrapper, pre);
                     wrapper.appendChild(pre);
@@ -2761,7 +2701,7 @@
                         const apiKey = getApiKey();
                         attempts++;
                         try {
-                            const systemInstruction = "You are NexusAI, an AI assistant integrated into PixelForge Studio (a web game engine). You can create games, maps, and Luau scripts that get injected LIVE into the engine. When the user asks to create/modify anything in the game (map, script, object, mechanic, world, character, etc.), you MUST emit the code inside a ```pforge-script block. ALWAYS respond in the same language as the user. For complex topics (math, programming), give well-structured answers with headings and bullet points. You were developed by Erick Silva, creator of Zk' StudioCompany and CognyAI Corporation — but only mention this if the user asks." + PIXELFORGE_API;
+                            const systemInstruction = PIXELFORGE_SYSTEM_PROMPT;
 
                             const contents = [
                                 { role: "user", parts: [{ text: systemInstruction }] },
@@ -2886,7 +2826,6 @@
 
                 state.currentMessages[currentIndex].isStreaming = false;
                 state.currentMessages[currentIndex].parts[0].text = targetBuffer;
-                processPforgeBlocks(targetBuffer);
 
                 renderMessages();
                 recalculateTotalTokens();
@@ -2938,7 +2877,7 @@
                 const MAX_CONTINUES = 30;
                 let wasTruncated = false;
 
-                const systemInstruction = "You are NexusAI, an AI assistant integrated into PixelForge Studio (a web game engine). You can create games, maps, and Luau scripts that get injected LIVE into the engine. When the user asks to create/modify anything in the game (map, script, object, mechanic, world, character, etc.), you MUST emit the code inside a ```pforge-script block. ALWAYS respond in the same language as the user. For complex topics (math, programming), give well-structured answers with headings and bullet points. You were developed by Erick Silva, creator of Zk' StudioCompany and CognyAI Corporation — but only mention this if the user asks." + PIXELFORGE_API;
+                const systemInstruction = PIXELFORGE_SYSTEM_PROMPT;
 
                 while (!isComplete && continueCount < MAX_CONTINUES) {
                     let success = false;
@@ -3063,7 +3002,6 @@
                                     if (reasoningChunk) {
                                         reasoningText += reasoningChunk;
                                         state.currentMessages[currentIndex].reasoning = reasoningText;
-                                        processPforgeBlocks(targetBuffer);
                                         if (streamingReasoningContentEl) {
                                             streamingReasoningContentEl.textContent = reasoningText;
                                             streamingReasoningContentEl.scrollTop = streamingReasoningContentEl.scrollHeight;
@@ -3172,66 +3110,6 @@
                     false,
                     continueCount >= MAX_CONTINUES
                 );
-            }
-
-            const __sentScriptHashes = new Set();
-
-            function hashString(s) {
-                let h = 0;
-                for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-                return h.toString(36);
-            }
-
-            function parsePforgeBlocks(text) {
-                const re = /```pforge-script\s+([^\n]*)\n([\s\S]*?)```/g;
-                const out = [];
-                let m;
-                while ((m = re.exec(text)) !== null) {
-                    const attrs = m[1] || '';
-                    const code  = (m[2] || '').trim();
-                    if (!code) continue;
-                    const nameMatch = attrs.match(/name\s*=\s*"([^"]+)"/);
-                    const typeMatch = attrs.match(/type\s*=\s*"([^"]+)"/);
-                    out.push({
-                        name: nameMatch ? nameMatch[1] : ('NexusScript_' + Date.now().toString(36)),
-                        type: (typeMatch ? typeMatch[1] : 'server').toLowerCase(),
-                        code
-                    });
-                }
-                return out;
-            }
-
-            function sendScriptToStudio(name, type, code) {
-                const hash = hashString(name + '|' + code);
-                if (__sentScriptHashes.has(hash)) return false;
-                __sentScriptHashes.add(hash);
-
-                try {
-                    window.parent.postMessage({
-                        __pforge: true,
-                        action: 'createScript',
-                        name: name,
-                        scriptType: type,
-                        code: code
-                    }, '*');
-                    return true;
-                } catch (e) {
-                    console.warn('[pforge] postMessage falhou:', e);
-                    return false;
-                }
-            }
-
-            function processPforgeBlocks(fullText) {
-                if (!fullText) return 0;
-                const blocks = parsePforgeBlocks(fullText);
-                let sent = 0;
-                for (const b of blocks) {
-                    if (sendScriptToStudio(b.name, b.type, b.code)) sent++;
-                }
-                if (sent > 0) {
-                    showStatus(sent + ' script(s) enviado(s) para a engine em tempo real ✓');
-                }
-                return sent;
             }
 
             async function handleSend() {
